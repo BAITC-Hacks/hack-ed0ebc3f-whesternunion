@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WindPilot — прогноз выработки ВЭС</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script defer src="/static/app.js"></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="/"><span class="brand-icon">↗</span> WindPilot<span class="brand-dot">.</span></a>
+    <div class="workspace">WHЕSTERNUNION <span>HACKALEM 2026</span></div>
+    <nav aria-label="Разделы"><a class="active" href="#overview">◫ <span>Обзор прогноза</span></a><a href="#quality">◎ <span>Качество данных</span></a><a href="#agent">⌘ <span>Журнал агента</span></a><a href="#history">↺ <span>История запусков</span></a></nav>
+    <div class="side-bottom"><div class="signal"><i></i> Локальная среда</div><p>Прогнозы и данные<br>сохраняются на этом компьютере.</p><span class="version">MVP / 0.1.0</span></div>
+  </aside>
+  <main id="overview">
+    <header><div class="breadcrumb">Рабочее пространство <span>/</span> Ветроэнергетика</div><div class="status-pill" id="connection">Подключение…</div></header>
+    <section class="page-title"><div><div class="eyebrow">ENERGY INTELLIGENCE</div><h1>Ветер в цифрах.</h1><p>Почасовой прогноз мощности с проверяемым происхождением данных.</p></div><div class="title-mark" aria-hidden="true">↗</div></section>
+    <form id="forecast-form" class="controls">
+      <label>Объект<select id="turbine"><option value="1">Турбина 01</option><option value="2">Турбина 02</option></select></label>
+      <label>Источник погоды<select id="mode"><option value="baseline">Инерционный baseline</option><option value="archive">Архив прогнозов</option><option value="live">Open-Meteo · сейчас</option></select></label>
+      <label>Горизонт<select id="horizon"><option value="48">48 часов</option><option value="24">24 часа</option></select></label>
+      <label class="origin-label">Момент расчёта (с часовым поясом)<input id="origin" value="2026-02-01T00:00:00+05:00" aria-label="Момент расчёта"></label>
+      <button type="submit" id="run">Рассчитать <span>↗</span></button>
+      <label class="ai-option"><input type="checkbox" id="use-ai"> Добавить OpenAI-анализ <small id="ai-status">ключ не проверен</small></label>
+    </form>
+    <div id="error" class="error" role="alert" hidden></div>
+    <div class="context-line"><span><i class="small-dot"></i><strong id="mode-label">Готовим первый расчёт</strong></span><span id="period">Все даты графика — UTC</span></div>
+    <section class="metrics" aria-label="Показатели прогноза">
+      <article><div>Средняя мощность <span>↗</span></div><strong id="mean">—</strong><small>доля номинальной мощности</small></article>
+      <article><div>Максимум мощности <span>⌁</span></div><strong id="peak">—</strong><small>в пределах горизонта</small></article>
+      <article><div>Эквивалент полной нагрузки <span>◷</span></div><strong id="energy">—</strong><small>часов при номинальной мощности</small></article>
+      <article><div>Средний ветер <span>≋</span></div><strong id="wind">—</strong><small>по выбранному источнику</small></article>
+    </section>
+    <section class="panel chart-panel"><div class="panel-head"><div><h2>Прогноз мощности</h2><p id="chart-subtitle">Почасовая детализация · нормализованная мощность</p></div><a id="download" class="button-secondary" hidden>↓ Скачать CSV</a></div>
+      <div class="legend"><span><i class="legend-line"></i>Прогноз</span><span><i class="legend-band"></i>Диапазон ошибок модели мощности</span></div>
+      <div id="chart" class="chart" aria-live="polite"><div class="empty">Модель обучается на доступных наблюдениях…</div></div>
+      <div class="chart-foot"><span>01 — Горизонт прогноза</span><span>Диапазон не учитывает ошибку прогноза погоды</span></div>
+    </section>
+    <div class="two-column">
+      <section class="panel" id="agent"><div class="panel-head"><div><div class="eyebrow">AGENT WORKFLOW</div><h2>От данных к решению</h2></div><span class="tag">Аудит</span></div><ol id="trace" class="trace"><li>Ожидание расчёта</li></ol><div class="ai-report"><span>AI-аналитик</span><p id="ai-text">Анализ подключается отдельно через OpenAI API.</p></div></section>
+      <section class="panel" id="quality"><div class="panel-head"><div><div class="eyebrow">DATA QUALITY</div><h2>Основа прогноза</h2></div><span class="tag" id="model-label">HGB</span></div><dl class="quality-grid"><div><dt>Пригодных часов</dt><dd id="usable">—</dd></div><div><dt>Пропущено часов</dt><dd id="missing">—</dd></div><div><dt>MAE модели мощности</dt><dd id="mae">—</dd></div><div><dt>RMSE модели мощности</dt><dd id="rmse">—</dd></div></dl><p class="metric-note">Метрики на отложенной фактической погоде. Они не измеряют качество прогноза на 24–48 часов.</p><details open><summary>Ограничения и допущения</summary><ul id="warnings"></ul></details></section>
+    </div>
+    <section class="panel"><div class="panel-head"><div><h2>Почасовые значения</h2><p>Время в UTC · мощность в долях номинала</p></div><span class="tag" id="row-count">—</span></div><div class="table-wrap"><table><thead><tr><th>Дата / время</th><th>Ветер, м/с</th><th>Температура, °C</th><th>Мощность</th><th>Диапазон модели</th></tr></thead><tbody id="forecast-table"></tbody></table></div></section>
+    <section class="panel" id="history"><div class="panel-head"><div><h2>История запусков</h2><p>Последние 20 локальных расчётов</p></div><button id="refresh-history" class="button-secondary">Обновить</button></div><div id="runs" class="runs"></div></section>
+    <footer><span>WindPilot / WhesternUnion</span><span>Проверяемые данные. Воспроизводимые расчёты.</span></footer>
+  </main>
+</body>
+</html>
