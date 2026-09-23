@@ -7,6 +7,22 @@ from wind_agent import api, service
 from wind_agent.model import features
 
 
+def make_archive(path, origins, horizon):
+    rows = []
+    for origin in origins:
+        issued = origin - pd.Timedelta(hours=7)
+        available = origin - pd.Timedelta(hours=1)
+        for valid_time in pd.date_range(origin, periods=horizon, freq='h'):
+            rows.append({'turbine': 1, 'issued_at': issued.isoformat(),
+                         'available_at': available.isoformat(),
+                         'valid_time': valid_time.isoformat(), 'wind_speed': 7.0,
+                         'temperature': 3.0,
+                         'source': f'fixture/model/{issued:%Y%m%d%H}',
+                         'kind': 'forecast'})
+    pd.DataFrame(rows).to_csv(path, index=False)
+    return path
+
+
 def test_real_pipeline_bounds_and_temporal_split(dataset):
     result = service.run_forecast(persist=False)
     assert len(result['forecast']) == 48
@@ -43,6 +59,52 @@ def test_backtest_without_actual_has_no_fabricated_metrics(dataset, weather_file
     assert result['scored_predictions'] == 0
     assert result['metrics'] is None
     assert all(row['actual'] is None for row in result['predictions'])
+
+
+def test_backtest_keeps_full_48_hour_horizon_and_scores_only_february(dataset):
+    start = pd.Timestamp('2026-01-31T00:00:00+05:00')
+    score_start = pd.Timestamp('2026-02-01T00:00:00+05:00')
+    end = pd.Timestamp('2026-02-02T00:00:00+05:00')
+    archive = make_archive(dataset / 'weather.csv', [start, score_start], 48)
+    result = service.backtest(1, archive, start, end, 48, persist=False,
+                              score_start=score_start)
+    assert len(result['runs']) == 2
+    assert result['total_predictions'] == 96
+    assert result['scored_predictions'] == 0
+    assert result['metrics'] is None
+    assert result['baseline_comparison'] is None
+    assert result['predictions'][-1]['lead_hour'] == 47
+    assert pd.Timestamp(result['predictions'][-1]['timestamp']) >= end
+    assert all(row['actual'] is None for row in result['predictions'])
+
+
+def test_backtest_compares_with_recent_power_only_on_matched_actuals(dataset):
+    origin = pd.Timestamp('2026-01-20T00:00:00+05:00')
+    archive = make_archive(dataset / 'weather.csv', [origin], 24)
+    result = service.backtest(1, archive, origin, origin + pd.Timedelta(days=1),
+                              24, persist=False)
+    assert result['scored_predictions'] == 24
+    assert result['baseline_comparison']['paired_predictions'] == 24
+    assert result['baseline_comparison']['model']['mae'] >= 0
+    assert result['baseline_comparison']['power_persistence_6h']['mae'] >= 0
+    assert all(item['scored_predictions'] == 1 for item in result['metrics_by_lead'].values())
+
+
+def test_february_actuals_score_without_entering_training(dataset, weather_file):
+    origin = '2026-02-01T00:00:00+05:00'
+    original = service.run_forecast(1, 24, origin, 'archive', weather_file, persist=False)
+    path = dataset / 'turbine_1.csv'
+    measured = pd.read_csv(path)
+    future_hours = pd.date_range('2026-02-01', periods=24 * 6, freq='10min')
+    future = pd.DataFrame({'timestamp': future_hours, 'wind_speed': 9.0,
+                           'power': 0.5, 'temperature': 4.0})
+    pd.concat([measured, future]).to_csv(path, index=False)
+    result = service.backtest(1, weather_file, origin,
+                              '2026-02-02T00:00:00+05:00', 24, persist=False)
+    assert result['scored_predictions'] == 24
+    assert result['metrics'] is not None
+    assert [row['power'] for row in result['predictions']] == [
+        row['power'] for row in original['forecast']]
 
 
 def test_api_forecast_export_and_bad_requests(dataset, monkeypatch):
