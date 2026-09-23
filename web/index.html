@@ -4,6 +4,8 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>WindPilot — прогноз выработки ВЭС</title>
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/origin-picker.css">
+  <script defer src="/static/origin-picker.js"></script>
   <script defer src="/static/app.js"></script>
 </head>
 <body>
@@ -20,7 +22,11 @@
       <label>Объект<select id="turbine"><option value="1">Турбина 01</option><option value="2">Турбина 02</option></select></label>
       <label>Источник погоды<select id="mode"><option value="baseline">Инерционный baseline</option><option value="archive">Архив прогнозов</option><option value="live">Open-Meteo · сейчас</option></select></label>
       <label>Горизонт<select id="horizon"><option value="48">48 часов</option><option value="24">24 часа</option></select></label>
-      <label class="origin-label">Момент расчёта (с часовым поясом)<input id="origin" value="2026-02-01T00:00:00+05:00" aria-label="Момент расчёта"></label>
+      <div class="origin-label">
+        <span id="origin-caption">Момент расчёта · UTC+5</span>
+        <button type="button" id="origin" aria-haspopup="dialog" aria-controls="origin-dialog" aria-labelledby="origin-caption origin-text" aria-describedby="origin-hint"><span id="origin-text">31 янв. 2026, 23:00</span><span aria-hidden="true">▦</span></button>
+        <small id="origin-hint">Выберите дату и час расчёта</small>
+      </div>
       <button type="submit" id="run">Рассчитать <span>↗</span></button>
       <label class="ai-option"><input type="checkbox" id="use-ai"> Добавить OpenAI-анализ <small id="ai-status">ключ не проверен</small></label>
     </form>
@@ -45,5 +51,16 @@
     <section class="panel" id="history"><div class="panel-head"><div><h2>История запусков</h2><p>Последние 20 локальных расчётов</p></div><button id="refresh-history" class="button-secondary">Обновить</button></div><div id="runs" class="runs"></div></section>
     <footer><span>WindPilot / WhesternUnion</span><span>Проверяемые данные. Воспроизводимые расчёты.</span></footer>
   </main>
+  <dialog id="origin-dialog" aria-labelledby="picker-title" aria-describedby="picker-zone">
+    <div class="picker-heading"><div><h2 id="picker-title">Момент расчёта</h2><p id="picker-zone">Дата и время в UTC+5</p></div><button type="button" id="picker-close" class="picker-icon" aria-label="Закрыть выбор даты">×</button></div>
+    <p id="picker-context" class="picker-context"></p>
+    <div class="picker-month-nav"><button type="button" id="picker-prev" class="picker-icon" aria-label="Предыдущий месяц">‹</button><strong id="picker-month" aria-live="polite"></strong><button type="button" id="picker-next" class="picker-icon" aria-label="Следующий месяц">›</button></div>
+    <div class="picker-weekdays" aria-hidden="true"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div>
+    <div id="picker-days" class="picker-days" role="group" aria-labelledby="picker-month"></div>
+    <div class="picker-time-title" id="picker-time-title">Время · шаг 1 час</div>
+    <div id="picker-hours" class="picker-hours" role="group" aria-labelledby="picker-time-title"></div>
+    <p id="picker-selection" class="picker-selection" aria-live="polite"></p>
+    <div class="picker-actions"><button type="button" id="picker-cancel">Отмена</button><button type="button" id="picker-apply">Выбрать</button></div>
+  </dialog>
 </body>
 </html>

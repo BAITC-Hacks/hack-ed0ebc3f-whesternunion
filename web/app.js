@@ -26,7 +26,7 @@ function chart(rows) {
 }
 function render(result) {
   $('turbine').value=String(result.turbine);$('horizon').value=String(result.horizon);
-  $('mode').value=result.mode;$('origin').value=result.origin;$('origin').disabled=result.mode==='live';
+  $('mode').value=result.mode;originPicker.setValue(result.origin,result.mode);
   $('mean').textContent=number(result.summary.mean_power*100,1)+' %';
   $('peak').textContent=number(result.summary.peak_power*100,1)+' %';
   $('energy').textContent=number(result.summary.equivalent_full_load_hours,1)+' ч';
@@ -54,12 +54,12 @@ async function refreshHistory() {
 async function run(event) {
   event?.preventDefault(); $('error').hidden=true; $('run').disabled=true; $('run').textContent='Расчёт…';
   try {
-    const result=await api('/api/forecast',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({turbine:Number($('turbine').value),horizon:Number($('horizon').value),mode:$('mode').value,origin:$('mode').value==='live'?null:$('origin').value,use_ai:$('use-ai').checked})});
+    const result=await api('/api/forecast',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({turbine:Number($('turbine').value),horizon:Number($('horizon').value),mode:$('mode').value,origin:$('mode').value==='live'?null:originPicker.getValue(),use_ai:$('use-ai').checked})});
     render(result);await refreshHistory();
   } catch(error) {showError(error.message);} finally {$('run').disabled=false;$('run').textContent='Рассчитать ↗';}
 }
 $('forecast-form').addEventListener('submit',run);
-$('mode').addEventListener('change',()=>{$('origin').disabled=$('mode').value==='live';});
+$('mode').addEventListener('change',()=>originPicker.setMode($('mode').value));
 $('refresh-history').addEventListener('click',()=>refreshHistory().catch(e=>showError(e.message)));
 async function initialize(){
   try{

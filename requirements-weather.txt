@@ -1,0 +1,3 @@
+# Optional GRIB decoder for: python -m wind_agent.weather_download
+# Install after the project's requirements.txt; no OpenAI or cloud account needed.
+eccodes==2.48.0

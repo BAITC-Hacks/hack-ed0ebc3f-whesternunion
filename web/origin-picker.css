@@ -1,0 +1,31 @@
+.controls .origin-label{display:flex;flex-direction:column;gap:7px;color:#788697;font-size:10px}
+.controls #origin{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;height:38px;padding:0 11px;background:#fff;color:var(--ink);border:1px solid #e1e6ed;border-radius:6px;font-size:12px;font-weight:400;text-align:left}
+.controls #origin span{margin:0}
+.controls #origin:hover:not(:disabled){border-color:var(--green)}
+.controls #origin:disabled{background:#f5f7fa;cursor:default}
+#origin-hint{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+#origin-dialog{width:410px;max-width:calc(100vw - 28px);max-height:90vh;overflow-y:auto;padding:22px;border:1px solid var(--line);border-radius:16px;background:#fff;color:var(--ink);box-shadow:0 20px 80px #18253833}
+#origin-dialog::backdrop{background:#15263866}
+.picker-heading,.picker-month-nav,.picker-actions{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.picker-heading p{font-size:11px}
+#origin-dialog button{font:inherit;cursor:pointer;touch-action:manipulation}
+#origin-dialog button:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+#origin-dialog .picker-icon{width:32px;height:32px;flex-shrink:0;background:#f5f7fa;color:#52657a;border:0;border-radius:8px;font-size:24px;line-height:1}
+.picker-context{font-size:11px;margin-top:14px;padding:9px 11px;background:var(--pale);color:var(--green);border-radius:7px}
+.picker-month-nav{margin:18px 0 14px}
+#picker-month{text-transform:capitalize;font-size:14px;font-weight:600}
+.picker-weekdays,.picker-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;text-align:center}
+.picker-weekdays{margin-bottom:8px;color:var(--muted);font-size:10px}
+.picker-days button{aspect-ratio:1;min-width:0;padding:0;border:1px solid transparent;background:#fff;border-radius:8px;color:var(--ink)}
+.picker-days button:hover,.picker-hours button:hover{background:var(--pale)}
+.picker-days button[aria-pressed=true],.picker-hours button[aria-pressed=true]{background:var(--green);color:#fff;border-color:var(--green)}
+.picker-time-title{font-size:11px;font-weight:600;margin:18px 0 10px}
+.picker-hours{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+#origin-dialog .picker-hours button{min-width:0;height:31px;padding:0;font-size:11px;border:1px solid var(--line);border-radius:6px;background:#f8faf9;color:#52657a}
+#origin-dialog .picker-hours button:hover{background:var(--pale)}
+#origin-dialog .picker-hours button[aria-pressed=true]{background:var(--green);border-color:var(--green);color:white}
+.picker-selection{margin:16px 0;font-size:11px;color:#5c6b7e}
+.picker-actions{justify-content:flex-end;padding-top:14px;border-top:1px solid var(--line)}
+.picker-actions button{height:36px;padding:0 16px;border:1px solid var(--line);border-radius:7px;background:#fff;color:#5c6b7e;font-size:12px}
+#picker-apply{background:var(--green);border-color:var(--green);color:#fff}
+@media(max-width:560px){#origin-dialog{padding:16px}.picker-days{gap:3px}.controls .origin-label{flex-basis:100%;min-width:0}}
