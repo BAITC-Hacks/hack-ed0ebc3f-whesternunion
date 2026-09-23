@@ -8,6 +8,44 @@ import pandas as pd
 from .config import coordinates
 from .data import instant
 
+ARCHIVE_COLUMNS = ['turbine', 'issued_at', 'available_at', 'valid_time',
+                   'wind_speed', 'temperature', 'source', 'kind']
+
+
+def validate_archive_frame(frame):
+    """Validate the shared CSV contract BEFORE selecting eligible runs."""
+    if not set(ARCHIVE_COLUMNS).issubset(frame.columns):
+        raise ValueError('Архив погоды: нужны столбцы ' + ', '.join(ARCHIVE_COLUMNS))
+    frame = frame[ARCHIVE_COLUMNS].copy()
+    if frame.empty:
+        raise ValueError('Архив погоды пуст.')
+    for column in ['issued_at', 'available_at', 'valid_time']:
+        frame[column] = frame[column].map(instant)
+    if not frame.turbine.isin([1, 2]).all():
+        raise ValueError('В архиве допустимы только турбины 1 и 2.')
+    if frame.source.isna().any() or frame.source.astype(str).str.strip().eq('').any():
+        raise ValueError('У каждой строки должен быть непустой источник прогноза.')
+    if not frame.kind.eq('forecast').all():
+        raise ValueError('Архив принимает только forecast, не observation/reanalysis/hindcast.')
+    if (frame.available_at < frame.issued_at).any():
+        raise ValueError('available_at не может быть раньше issued_at.')
+    if (frame.valid_time <= frame.issued_at).any():
+        raise ValueError('valid_time должен быть позже инициализации прогноза.')
+    if not frame.valid_time.eq(frame.valid_time.dt.floor('h')).all():
+        raise ValueError('valid_time должен быть на границе часа.')
+    group = ['turbine', 'issued_at', 'source']
+    if frame.duplicated(group + ['valid_time']).any():
+        raise ValueError('В архивном запуске есть дубликаты valid_time.')
+    if (frame.groupby(group).available_at.nunique() != 1).any():
+        raise ValueError('У запуска должно быть одно available_at: время доступности полного горизонта.')
+    for column in ['wind_speed', 'temperature']:
+        frame[column] = pd.to_numeric(frame[column], errors='coerce')
+    if (not np.isfinite(frame[['wind_speed', 'temperature']]).all().all()
+            or not frame.wind_speed.between(0, 75).all()
+            or not frame.temperature.between(-80, 65).all()):
+        raise ValueError('Некорректная погода: нужны конечные значения в м/с и °C.')
+    return frame
+
 
 def target_hours(origin, horizon):
     stamp = instant(origin)
@@ -41,16 +79,8 @@ def persistence(history, origin, horizon):
 
 
 def archive(path: Path, turbine, origin, horizon):
-    frame = pd.read_csv(path)
-    required = {'turbine', 'issued_at', 'available_at', 'valid_time', 'wind_speed',
-                'temperature', 'source', 'kind'}
-    if not required.issubset(frame.columns):
-        raise ValueError('Архив погоды: нужны столбцы ' + ', '.join(sorted(required)))
+    frame = validate_archive_frame(pd.read_csv(path))
     frame = frame[frame.turbine == turbine].copy()
-    for column in ['issued_at', 'available_at', 'valid_time']:
-        frame[column] = frame[column].map(instant)
-    if (frame.available_at < frame.issued_at).any():
-        raise ValueError('available_at не может быть раньше issued_at.')
     eligible = frame[(frame.issued_at <= instant(origin))
                      & (frame.available_at <= instant(origin)) & (frame.kind == 'forecast')]
     hours = target_hours(origin, horizon)
