@@ -52,7 +52,9 @@ def datasets():
 @app.post('/api/forecast')
 def forecast(request: ForecastRequest):
     try:
-        return run_forecast(**request.model_dump(), archive_path=ROOT / 'data' / 'weather_forecasts.csv')
+        training_path = ROOT / 'data' / 'weather_training.csv'
+        return run_forecast(**request.model_dump(), archive_path=ROOT / 'data' / 'weather_forecasts.csv',
+                            training_archive_path=training_path if training_path.is_file() else None)
     except (ValueError, FileNotFoundError) as error:
         raise HTTPException(422, str(error)) from None
     except (httpx.HTTPError, KeyError):

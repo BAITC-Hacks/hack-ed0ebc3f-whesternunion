@@ -19,8 +19,10 @@ def dataset(tmp_path, monkeypatch):
     monkeypatch.setattr(data, 'TIMEZONE', 'Etc/GMT-5')
     monkeypatch.setattr(service, 'ARTIFACT_DIR', tmp_path / 'artifacts')
     service.trained.cache_clear()
+    service.archive_trained.cache_clear()
     yield tmp_path
     service.trained.cache_clear()
+    service.archive_trained.cache_clear()
 
 
 @pytest.fixture

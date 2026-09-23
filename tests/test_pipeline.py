@@ -90,6 +90,25 @@ def test_backtest_compares_with_recent_power_only_on_matched_actuals(dataset):
     assert all(item['scored_predictions'] == 1 for item in result['metrics_by_lead'].values())
 
 
+def test_score_end_is_independent_of_issue_end(dataset):
+    origin = pd.Timestamp('2026-02-28T23:00:00+05:00')
+    score_end = pd.Timestamp('2026-03-01T00:00:00+05:00')
+    path = dataset / 'turbine_1.csv'
+    measured = pd.read_csv(path)
+    future = pd.DataFrame({'timestamp': pd.date_range('2026-02-28T23:00',
+                           periods=49 * 6, freq='10min'), 'wind_speed': 9.0,
+                           'power': 0.5, 'temperature': 4.0})
+    pd.concat([measured, future]).to_csv(path, index=False)
+    archive = make_archive(dataset / 'weather.csv', [origin], 48)
+    result = service.backtest(1, archive, origin, origin + pd.Timedelta(days=1), 48,
+                              persist=False, score_start=origin, score_end=score_end)
+    assert result['total_predictions'] == 48
+    assert result['scored_predictions'] == 1
+    assert result['coverage']['missing_hours'] == 0
+    assert result['predictions'][0]['actual'] == 0.5
+    assert all(row['actual'] is None for row in result['predictions'][1:])
+
+
 def test_february_actuals_score_without_entering_training(dataset, weather_file):
     origin = '2026-02-01T00:00:00+05:00'
     original = service.run_forecast(1, 24, origin, 'archive', weather_file, persist=False)
@@ -122,3 +141,28 @@ def test_api_forecast_export_and_bad_requests(dataset, monkeypatch):
     assert client.post('/api/forecast', json={'horizon': 3}).status_code == 422
     assert client.post('/api/forecast', json={'origin': '2026-02-01'}).status_code == 422
     assert client.get('/api/runs/not-a-run').status_code == 404
+
+
+def test_archive_default_origin_matches_downloader(dataset):
+    origin = pd.Timestamp('2026-01-31T23:00:00+05:00')
+    archive = make_archive(dataset / 'weather.csv', [origin], 48)
+    result = service.run_forecast(1, 48, mode='archive', archive_path=archive, persist=False)
+    assert pd.Timestamp(result['origin']) == origin
+    assert len(result['forecast']) == 48
+
+
+def test_api_uses_prepared_training_archive(dataset, monkeypatch):
+    monkeypatch.setattr(api, 'ROOT', dataset)
+    training_path = dataset / 'data' / 'weather_training.csv'
+    training_path.parent.mkdir()
+    training_path.write_text('fixture', encoding='utf-8')
+    calls = []
+
+    def fake_forecast(**kwargs):
+        calls.append(kwargs)
+        return {'id': 'fixture'}
+
+    monkeypatch.setattr(api, 'run_forecast', fake_forecast)
+    response = TestClient(api.app).post('/api/forecast', json={'mode': 'archive'})
+    assert response.status_code == 200
+    assert calls[0]['training_archive_path'] == training_path

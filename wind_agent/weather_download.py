@@ -21,11 +21,10 @@ import pandas as pd
 
 from .config import COORDINATES, ROOT
 from .data import instant
+from .schedule import FIRST_ORIGIN, LAST_ORIGIN
 from .weather import ARCHIVE_COLUMNS, archive, validate_archive_frame
 
 BASE = 'https://noaa-gfs-bdp-pds.s3.amazonaws.com'
-FIRST_ORIGIN = '2026-01-31T23:00:00+05:00'
-LAST_ORIGIN = '2026-02-28T23:00:00+05:00'
 VERSION = 'noaa-gfs-original-v1'
 DECODE_LOCK = threading.Lock()
 FIELDS = {'temperature': ('TMP', '2 m above ground'),
