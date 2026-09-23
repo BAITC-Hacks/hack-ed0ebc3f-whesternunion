@@ -38,6 +38,8 @@ function render(result) {
   $('missing').textContent=number(result.quality.missing_hours,0);
   $('mae').textContent=number(result.validation.mae,4);
   $('rmse').textContent=number(result.validation.rmse,4);
+  document.querySelector('.metric-note').textContent=result.validation.note;
+  $('model-label').textContent=result.validation.scope==='power_on_archived_forecast_weather'?'HGB · NWP':'HGB · SCADA';
   $('row-count').textContent=`${result.forecast.length} часов`;
   $('ai-text').textContent=result.ai.text;
   $('trace').replaceChildren(...result.trace.map(item=>{const li=document.createElement('li');const title=document.createElement('strong');title.textContent=steps[item.step]||item.step;li.append(title,document.createTextNode(item.message));return li;}));

@@ -12,7 +12,8 @@ from . import weather
 from .agent import explain
 from .config import ARTIFACT_DIR, TIMEZONE
 from .data import dataset_path, instant, load_history, training_end
-from .model import fit_archive_model, fit_model, predict
+from .model import fit_archive_model, fit_model, predict, source_family
+from .schedule import FIRST_ORIGIN
 
 LOCK = threading.RLock()
 MODEL_VERSION = 'power-curve-hgb-v1'
@@ -42,7 +43,7 @@ def save_result(result):
 
 
 def run_forecast(turbine=1, horizon=48, origin=None, mode='baseline',
-                 archive_path=None, use_ai=False, persist=True):
+                 archive_path=None, use_ai=False, persist=True, training_archive_path=None):
     with LOCK:
         trace = []
         def event(step, message):
@@ -53,7 +54,8 @@ def run_forecast(turbine=1, horizon=48, origin=None, mode='baseline',
         if mode == 'live':
             forecast_weather, provenance, origin = weather.live(turbine, horizon)
         else:
-            origin = instant(origin) if origin is not None else training_end()
+            origin = instant(origin) if origin is not None else (
+                instant(FIRST_ORIGIN) if mode == 'archive' else training_end())
         weather.target_hours(origin, horizon)
         cutoff = min(origin, training_end())
         source_hash = hashlib.sha256(dataset_path(turbine).read_bytes()).hexdigest()
@@ -69,13 +71,16 @@ def run_forecast(turbine=1, horizon=48, origin=None, mode='baseline',
         model_version = MODEL_VERSION
         issued_at = None
         if mode == 'archive':
+            training_path = Path(training_archive_path or archive_path).resolve()
+            training_hash = hashlib.sha256(training_path.read_bytes()).hexdigest()
             archived = archive_trained(turbine, cutoff.isoformat(), source_hash,
-                                       str(Path(archive_path).resolve()), provenance['sha256'],
-                                       provenance['source'])
+                                       str(training_path), training_hash,
+                                       source_family(provenance['source']))
             if archived is not None:
                 model, residual, validation = archived
                 model_version = ARCHIVE_MODEL_VERSION
                 issued_at = provenance['issued_at']
+            provenance = {**provenance, 'training_archive_sha256': training_hash}
         event('train', f"{model_version}: хронологическая валидация, затем обучение на доступной истории.")
         output = predict(model, forecast_weather, residual, issued_at)
         rows = []
@@ -146,23 +151,34 @@ def recent_power_baseline(observations, origin):
     return float(recent.mean())
 
 
-def backtest(turbine, archive_path, start, end, horizon=24, persist=True, score_start=None):
+def backtest(turbine, archive_path, start, end, horizon=24, persist=True,
+             score_start=None, score_end=None, training_archive_path=None):
     start, end = instant(start), instant(end)
     if end <= start or end - start > pd.Timedelta(days=62):
         raise ValueError('Период бэктеста должен быть от 1 до 62 дней.')
     score_start = instant(score_start) if score_start is not None else start
-    if not start <= score_start < end:
-        raise ValueError('Начало оценки должно попадать в период запусков.')
+    score_end = instant(score_end) if score_end is not None else end
+    if score_end <= score_start:
+        raise ValueError('Конец оценки должен быть позже начала оценки.')
+    for boundary in (start, end, score_start, score_end):
+        if boundary != boundary.floor('h'):
+            raise ValueError('Границы запусков и оценки должны быть на границе часа.')
     observations, _ = load_history(turbine)
     rows, runs = [], []
     for origin in pd.date_range(start, end, freq='24h', inclusive='left'):
-        result = run_forecast(turbine, horizon, origin, 'archive', archive_path, persist=persist)
+        result = run_forecast(turbine, horizon, origin, 'archive', archive_path,
+                              persist=persist, training_archive_path=training_archive_path)
         runs.append(result['id'])
         baseline_power = recent_power_baseline(observations, origin)
         for row in result['forecast']:
             timestamp = instant(row['timestamp'])
-            actual = observations.power.get(timestamp, np.nan) if score_start <= timestamp < end else np.nan
-            rows.append({**row, 'origin': origin.isoformat(),
+            actual = observations.power.get(timestamp, np.nan) if score_start <= timestamp < score_end else np.nan
+            rows.append({**row, 'turbine': turbine, 'horizon': horizon,
+                          'origin': origin.isoformat(), 'run_id': result['id'],
+                          'model': result['model'], 'training_cutoff': result['training_cutoff'],
+                          'weather_issued_at': result['weather']['issued_at'],
+                          'weather_available_at': result['weather']['available_at'],
+                          'weather_source': result['weather']['source'],
                           'lead_hour': int((timestamp - origin).total_seconds() / 3600),
                           'actual': float(actual) if pd.notna(actual) else None,
                           'baseline_power': baseline_power})
@@ -178,12 +194,18 @@ def backtest(turbine, archive_path, start, end, horizon=24, persist=True, score_
         lead_rows = [row for row in scored if row['lead_hour'] == lead]
         by_lead[str(lead)] = {'scored_predictions': len(lead_rows),
                               'metrics': error_metrics(lead_rows)}
+    expected_hours = pd.date_range(score_start, score_end, freq='h', inclusive='left')
+    covered_hours = {instant(row['timestamp']) for row in rows}
+    missing_hours = expected_hours.difference(pd.DatetimeIndex(sorted(covered_hours)))
     result = {'turbine': turbine, 'start': start.isoformat(), 'end': end.isoformat(),
-              'score_start': score_start.isoformat(), 'score_end': end.isoformat(),
+              'score_start': score_start.isoformat(), 'score_end': score_end.isoformat(),
               'horizon': horizon, 'runs': runs, 'predictions': rows,
               'scored_predictions': len(scored), 'total_predictions': len(rows),
               'metrics': error_metrics(scored), 'metrics_by_lead': by_lead,
               'baseline_comparison': comparison,
+              'coverage': {'expected_hours': len(expected_hours),
+                           'missing_hours': len(missing_hours),
+                           'missing_timestamps': [stamp.isoformat() for stamp in missing_hours]},
               'note': 'Все горизонты сохраняются. Метрики считаются только внутри окна оценки; перекрытия оцениваются отдельно по каждому запуску. Нет факта — нет метрики.'}
     if persist:
         ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
